@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Загран OCR">
+  <title>Загранпаспорт РФ OCR</title>
+  <style>
+    :root{--blue:#2563eb;--green:#059669;--dark:#111827;--bg:#f5f7fb;--card:#fff;--muted:#6b7280;--red:#dc2626}
+    *{box-sizing:border-box}
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;background:var(--bg);margin:0;color:#111}
+    .wrap{max-width:980px;margin:0 auto;padding:16px 16px 44px}
+    .card{background:var(--card);border-radius:22px;padding:18px;box-shadow:0 10px 30px rgba(0,0,0,.08)}
+    h1{font-size:26px;margin:6px 0 8px}
+    h2{font-size:20px;margin:24px 0 10px}
+    .hint{color:#444;line-height:1.45;font-size:15px}
+    .note{background:#eef2ff;border-radius:14px;padding:12px;margin:12px 0;color:#1f2937;font-size:14px;line-height:1.45}
+    input[type=file]{position:absolute;left:-9999px}
+    .bigbtn,label.bigbtn{
+      display:block;width:100%;border:0;border-radius:16px;padding:16px 18px;
+      background:var(--blue);color:#fff;text-align:center;font-size:18px;font-weight:800;
+      margin:10px 0;cursor:pointer;text-decoration:none;
+    }
+    .secondary{background:var(--dark)!important}
+    .success{background:var(--green)!important}
+    .ghost{background:#e5e7eb!important;color:#111!important}
+    button:disabled{background:#9ca3af!important}
+    .status{margin:14px 0;font-weight:800;line-height:1.35}
+    img{max-width:100%;border-radius:16px;margin-top:12px;border:1px solid #e5e7eb}
+    .grid{display:grid;grid-template-columns:1fr;gap:10px;margin-top:12px}
+    .field{background:#f3f4f6;border-radius:14px;padding:12px}
+    .label{font-size:13px;color:var(--muted);margin-bottom:5px}
+    .value{font-weight:900;word-break:break-word;font-size:17px}
+    textarea{width:100%;min-height:170px;border-radius:14px;border:1px solid #d1d5db;padding:12px;font-size:15px}
+    .small{font-size:13px;color:var(--muted);line-height:1.45}
+    .warn{color:var(--red);font-weight:800}
+    .row{display:grid;grid-template-columns:1fr;gap:10px}
+    @media(min-width:760px){.grid{grid-template-columns:1fr 1fr}.row{grid-template-columns:1fr 1fr}.wrap{padding-top:30px}.card{padding:24px}}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <h1>Загранпаспорт РФ → карточка клиента</h1>
+    <p class="hint">
+      Улучшенная версия для старых и новых загранпаспортов РФ. Сначала распознаётся нижняя MRZ-зона, потом всё изображение.
+      Лучше всего работает, когда нижние две строки с символами «&lt;&lt;&lt;» видны полностью.
+    </p>
+
+    <div class="note">
+      На iPhone открывайте сайт в Safari. Для иконки как приложение: «Поделиться» → «На экран Домой».
+      Фото паспортов не отправляются в вашу CRM или базу; OCR выполняется в браузере. OCR-библиотека загружается из интернета.
+    </div>
+
+    <label class="bigbtn" for="cameraInput">📷 Сделать фото паспорта</label>
+    <input id="cameraInput" type="file" accept="image/*" capture="environment">
+
+    <label class="bigbtn ghost" for="galleryInput">🖼 Выбрать фото из галереи</label>
+    <input id="galleryInput" type="file" accept="image/*">
+
+    <div class="row">
+      <button class="bigbtn success" id="run">Распознать паспорт</button>
+      <button class="bigbtn secondary" id="copy">Скопировать карточку</button>
+    </div>
+
+    <div class="status" id="status">Готово. Выберите или сделайте фото.</div>
+    <img id="preview" style="display:none" />
+
+    <h2>Карточка клиента</h2>
+    <div class="grid">
+      <div class="field"><div class="label">Фамилия</div><div class="value" id="surname">—</div></div>
+      <div class="field"><div class="label">Имя / имена</div><div class="value" id="given">—</div></div>
+      <div class="field"><div class="label">Номер паспорта</div><div class="value" id="passport">—</div></div>
+      <div class="field"><div class="label">Гражданство</div><div class="value" id="nationality">—</div></div>
+      <div class="field"><div class="label">Дата рождения</div><div class="value" id="birth">—</div></div>
+      <div class="field"><div class="label">Пол</div><div class="value" id="sex">—</div></div>
+      <div class="field"><div class="label">Дата окончания</div><div class="value" id="expiry">—</div></div>
+      <div class="field"><div class="label">Качество распознавания</div><div class="value" id="quality">—</div></div>
+    </div>
+
+    <h2>Готовый текст</h2>
+    <textarea id="cardText" readonly></textarea>
+    <p class="small">
+      <span class="warn">Важно:</span> перед использованием в работе всегда сверяйте номер и даты глазами с паспортом.
+      OCR может путать O/0, I/1, B/8, S/5 на бликах или размытых фото.
+    </p>
+
+    <h2>MRZ и полный OCR</h2>
+    <textarea id="raw" readonly></textarea>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+let selectedFile = null;
+
+function setStatus(t){ $("status").textContent = t; }
+
+function fileToImage(file){
+  return new Promise((resolve,reject)=>{
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+function canvasToBlob(canvas){
+  return new Promise(resolve => canvas.toBlob(resolve, "image/jpeg", 0.92));
+}
+
+function makeCrop(img, mode){
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d", {willReadFrequently:true});
+  const w = img.naturalWidth || img.width;
+  const h = img.naturalHeight || img.height;
+
+  let sx=0, sy=0, sw=w, sh=h;
+
+  if(mode === "mrz_bottom_35"){
+    sy = Math.floor(h * 0.62); sh = Math.floor(h * 0.38);
+  } else if(mode === "mrz_bottom_45"){
+    sy = Math.floor(h * 0.52); sh = Math.floor(h * 0.48);
+  } else if(mode === "middle_bottom"){
+    sy = Math.floor(h * 0.35); sh = Math.floor(h * 0.65);
+  }
+
+  const scale = Math.min(2200 / sw, 3);
+  canvas.width = Math.max(1, Math.floor(sw * scale));
+  canvas.height = Math.max(1, Math.floor(sh * scale));
+  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+
+  // Лёгкое повышение контраста
+  const imageData = ctx.getImageData(0,0,canvas.width,canvas.height);
+  const d = imageData.data;
+  for(let i=0;i<d.length;i+=4){
+    let r=d[i], g=d[i+1], b=d[i+2];
+    let gray = 0.299*r + 0.587*g + 0.114*b;
+    gray = (gray - 128) * 1.35 + 128;
+    gray = Math.max(0, Math.min(255, gray));
+    d[i]=d[i+1]=d[i+2]=gray;
+  }
+  ctx.putImageData(imageData,0,0);
+  return canvas;
+}
+
+function cleanMRZLine(s){
+  return (s || "")
+    .toUpperCase()
+    .replace(/\s/g,"")
+    .replace(/[«‹>{}\[\]\(\)]/g,"<")
+    .replace(/[|!]/g,"I")
+    .replace(/¥/g,"Y")
+    .replace(/[^A-Z0-9<]/g,"");
+}
+
+function fixMRZChars(line, lineIndex){
+  let l = cleanMRZLine(line);
+
+  // Частые OCR-ошибки в MRZ
+  l = l.replace(/O/g,"0"); // потом вернём буквы в буквенных зонах отдельно не нужно для цифр
+  // В первой строке после P< обычно нужны буквы, поэтому корректируем код страны и ФИО
+  if(lineIndex === 1){
+    l = l.replace(/^P0/,"P<").replace(/^P</,"P<");
+    l = l.replace(/^P<0US/,"P<RUS").replace(/^P<RU5/,"P<RUS").replace(/^P<RU8/,"P<RUS");
+    // Для ФИО цифры чаще являются буквами
+    l = l.replace(/0/g,"O").replace(/1/g,"I").replace(/5/g,"S").replace(/8/g,"B").replace(/6/g,"G");
+  }
+  return l;
+}
+
+function findMRZ(text){
+  const lines = text.split(/\n+/).map(cleanMRZLine).filter(Boolean);
+  let candidates = [];
+
+  for(const original of lines){
+    let l = original;
+
+    // Иногда Tesseract склеивает обе MRZ-строки в одну длинную
+    if(l.length >= 70 && l.includes("P<")){
+      const idx = l.indexOf("P<");
+      const part = l.slice(idx);
+      if(part.length >= 60){
+        candidates.push(part.slice(0,44));
+        candidates.push(part.slice(44,88));
+        continue;
+      }
+    }
+
+    if(l.includes("<") && l.length >= 25) candidates.push(l);
+  }
+
+  // Паспорта TD3: 2 строки примерно по 44 символа
+  const normalized = candidates.map((l,i)=>fixMRZChars(l, i===0 ? 1 : 2));
+
+  // Ищем первую строку с P< или похожую
+  for(let i=0;i<normalized.length-1;i++){
+    const a = normalized[i], b = normalized[i+1];
+    if((a.startsWith("P<") || a.includes("RUS")) && b.length >= 25){
+      return [a.padEnd(44,"<").slice(0,44), b.padEnd(44,"<").slice(0,44)];
+    }
+  }
+
+  if(normalized.length >= 2){
+    const last2 = normalized.slice(-2);
+    return [fixMRZChars(last2[0],1).padEnd(44,"<").slice(0,44), fixMRZChars(last2[1],2).padEnd(44,"<").slice(0,44)];
+  }
+  return [];
+}
+
+function digitsOnlyWithFix(s){
+  return (s || "")
+    .toUpperCase()
+    .replace(/O/g,"0")
+    .replace(/Q/g,"0")
+    .replace(/D/g,"0")
+    .replace(/I/g,"1")
+    .replace(/L/g,"1")
+    .replace(/B/g,"8")
+    .replace(/S/g,"5")
+    .replace(/Z/g,"2")
+    .replace(/G/g,"6")
+    .replace(/[^0-9]/g,"");
+}
+
+function formatDateYYMMDD(s, type){
+  s = digitsOnlyWithFix(s).slice(0,6);
+  if(!/^\d{6}$/.test(s)) return "—";
+  const yy = parseInt(s.slice(0,2),10);
+  const mm = s.slice(2,4), dd = s.slice(4,6);
+  const m = parseInt(mm,10), d = parseInt(dd,10);
+  if(m < 1 || m > 12 || d < 1 || d > 31) return `${dd}.${mm}.??`;
+  let year;
+  if(type === "birth"){
+    const currentYY = new Date().getFullYear() % 100;
+    year = yy <= currentYY ? 2000 + yy : 1900 + yy;
+  } else {
+    year = 2000 + yy;
+  }
+  return `${dd}.${mm}.${year}`;
+}
+
+function parseMRZFromText(text){
+  const mrz = findMRZ(text);
+  const empty = {surname:"—",given:"—",passport:"—",nationality:"—",birth:"—",sex:"—",expiry:"—",mrz,quality:"MRZ не найден"};
+  if(mrz.length < 2) return empty;
+
+  let [l1,l2raw] = mrz;
+  let l2 = l2raw.toUpperCase();
+
+  const namePart = l1.slice(5);
+  const parts = namePart.split("<<");
+  const surname = (parts[0] || "").replace(/</g," ").trim() || "—";
+  const given = (parts.slice(1).join(" ") || "").replace(/</g," ").replace(/\s+/g," ").trim() || "—";
+
+  const passportRaw = l2.slice(0,9);
+  const passport = digitsOnlyWithFix(passportRaw).slice(0,9) || passportRaw.replace(/</g,"") || "—";
+
+  let nationality = l2.slice(10,13).replace(/[0]/g,"O").replace(/[5]/g,"S").replace(/</g,"");
+  if(nationality === "RU5" || nationality === "RU8" || nationality === "RUS") nationality = "RUS";
+
+  const birth = formatDateYYMMDD(l2.slice(13,19), "birth");
+  let rawSex = l2.slice(20,21).replace(/</g,"");
+  if(rawSex !== "M" && rawSex !== "F") rawSex = rawSex === "H" ? "M" : rawSex;
+  const sex = rawSex === "M" ? "M / мужской" : rawSex === "F" ? "F / женский" : rawSex || "—";
+  const expiry = formatDateYYMMDD(l2.slice(21,27), "expiry");
+
+  let score = 0;
+  if(surname !== "—") score++;
+  if(given !== "—") score++;
+  if(/^\d{7,9}$/.test(passport)) score++;
+  if(nationality === "RUS") score++;
+  if(birth !== "—") score++;
+  if(expiry !== "—") score++;
+  if(rawSex === "M" || rawSex === "F") score++;
+
+  const quality = score >= 6 ? "Хорошее" : score >= 4 ? "Среднее — проверьте глазами" : "Слабое — нужно другое фото";
+  return {surname,given,passport,nationality,birth,sex,expiry,mrz,quality};
+}
+
+function render(data, rawText){
+  $("surname").textContent = data.surname;
+  $("given").textContent = data.given;
+  $("passport").textContent = data.passport;
+  $("nationality").textContent = data.nationality;
+  $("birth").textContent = data.birth;
+  $("sex").textContent = data.sex;
+  $("expiry").textContent = data.expiry;
+  $("quality").textContent = data.quality;
+
+  const card = `🌍 ЗАГРАНПАСПОРТ РФ
+
+Фамилия: ${data.surname}
+Имя: ${data.given}
+Номер паспорта: ${data.passport}
+Дата рождения: ${data.birth}
+Пол: ${data.sex}
+Гражданство: ${data.nationality}
+Дата окончания: ${data.expiry}
+Качество OCR: ${data.quality}
+
+MRZ:
+${data.mrz.join("\n") || "Не найдено"}`;
+  $("cardText").value = card;
+  $("raw").value = `MRZ:
+${data.mrz.join("\n") || "Не найдено"}
+
+----- Полный OCR -----
+${rawText || ""}`;
+}
+
+function chooseBest(results){
+  let best = results[0];
+  const scoreData = d => {
+    let s = 0;
+    if(d.mrz && d.mrz.length >= 2) s += 5;
+    if(d.surname !== "—") s++;
+    if(d.given !== "—") s++;
+    if(/^\d{7,9}$/.test(d.passport)) s += 2;
+    if(d.nationality === "RUS") s++;
+    if(d.birth !== "—") s++;
+    if(d.expiry !== "—") s++;
+    if(d.sex.includes("муж") || d.sex.includes("жен")) s++;
+    return s;
+  };
+  for(const r of results){
+    if(scoreData(r.data) > scoreData(best.data)) best = r;
+  }
+  return best;
+}
+
+function setFile(file){
+  selectedFile = file;
+  if(!file) return;
+  const url = URL.createObjectURL(file);
+  $("preview").src = url;
+  $("preview").style.display = "block";
+  setStatus("Фото выбрано. Нажмите «Распознать паспорт».");
+}
+
+$("cameraInput").addEventListener("change", e => setFile(e.target.files[0]));
+$("galleryInput").addEventListener("change", e => setFile(e.target.files[0]));
+
+$("run").addEventListener("click", async () => {
+  if(!selectedFile){ alert("Сначала выберите или сделайте фото паспорта."); return; }
+
+  $("run").disabled = true;
+  setStatus("Готовлю изображение...");
+
+  try{
+    const img = await fileToImage(selectedFile);
+    const modes = ["mrz_bottom_35", "mrz_bottom_45", "middle_bottom", "full"];
+    const results = [];
+
+    for(let i=0;i<modes.length;i++){
+      const mode = modes[i];
+      setStatus(`Распознаю ${i+1}/4: ${mode === "full" ? "весь паспорт" : "MRZ-зону"}...`);
+      let source;
+      if(mode === "full") source = selectedFile;
+      else source = await canvasToBlob(makeCrop(img, mode));
+
+      const result = await Tesseract.recognize(source, "eng", {
+        tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<",
+        logger: m => {
+          if(m.status && m.progress) setStatus(`Распознаю ${i+1}/4: ${Math.round(m.progress*100)}%`);
+        }
+      });
+      const text = result.data.text || "";
+      const data = parseMRZFromText(text);
+      results.push({mode,text,data});
+
+      // Если уже хорошее распознавание MRZ — не тратим время
+      if(data.quality === "Хорошее" && data.nationality === "RUS" && /^\d{7,9}$/.test(data.passport)) break;
+    }
+
+    const best = chooseBest(results);
+    render(best.data, results.map(r => `=== ${r.mode} ===\n${r.text}`).join("\n\n"));
+    setStatus(best.data.quality === "Хорошее" ? "Готово. MRZ распознан хорошо." : "Готово, но проверьте поля. Для лучшего результата сфотографируйте нижние строки ближе.");
+  }catch(e){
+    console.error(e);
+    setStatus("Ошибка. Попробуйте открыть сайт в Safari/Chrome или загрузить другое фото JPG.");
+  }finally{
+    $("run").disabled = false;
+  }
+});
+
+$("copy").addEventListener("click", async () => {
+  try{
+    await navigator.clipboard.writeText($("cardText").value);
+    setStatus("Карточка скопирована.");
+  }catch(e){
+    $("cardText").select();
+    setStatus("Выделил текст. Нажмите «Скопировать» вручную.");
+  }
+});
+
+render(parseMRZFromText(""), "");
+</script>
+</body>
+</html>
